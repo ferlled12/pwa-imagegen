@@ -27,7 +27,6 @@ export default async function handler(req, res) {
       }
     );
 
-    // Model may still be loading — HF returns 503 with estimated_time
     if (hfRes.status === 503) {
       const info = await hfRes.json();
       const wait = info.estimated_time ? Math.ceil(info.estimated_time) : 30;
@@ -43,16 +42,21 @@ export default async function handler(req, res) {
       return res.status(hfRes.status).json({ error: err.error || "Error en Hugging Face API" });
     }
 
-    // Response is raw image bytes — read actual content type
-    const mimeType = hfRes.headers.get("content-type") || "image/png";
-    const buffer = await hfRes.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
+    const contentType = hfRes.headers.get("content-type") || "image/png";
+    console.log("HF content-type:", contentType);
 
-    return res.status(200).json({ imageBase64: base64, mimeType });
+    // Stream image bytes directly to client instead of base64
+    const imageBuffer = await hfRes.arrayBuffer();
+    console.log("Image buffer size:", imageBuffer.byteLength);
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Length", imageBuffer.byteLength);
+    res.status(200).send(Buffer.from(imageBuffer));
 
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
+
 

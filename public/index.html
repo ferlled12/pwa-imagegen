@@ -627,17 +627,15 @@
           body: JSON.stringify({ prompt, apiKey })
         });
 
-        const data = await res.json();
-
-        if (res.status === 503 && data.loading) {
-          throw new Error(`⏳ ${data.error}`);
-        }
-
-        if (!res.ok || data.error) {
+        // Response is the image directly as binary
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (res.status === 503 && data.loading) throw new Error(`⏳ ${data.error}`);
           throw new Error(data.error || "Error desconocido");
         }
 
-        const imgSrc = `data:${data.mimeType};base64,${data.imageBase64}`;
+        const blob = await res.blob();
+        const imgSrc = URL.createObjectURL(blob);
         showImage(imgSrc, prompt);
         addToHistory(imgSrc, prompt);
 
@@ -724,7 +722,7 @@
       try {
         const a = document.createElement("a");
         a.href = currentImageUrl;
-        a.download = `imagegen-${Date.now()}.jpg`;
+        a.download = `imagegen-${Date.now()}.png`;
         a.click();
       } catch {
         console.error("Download failed");
