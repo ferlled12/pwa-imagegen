@@ -1,7 +1,7 @@
 {
-  "name": "ImageGen · Gemini",
+  "name": "ImageGen · Stable Diffusion XL",
   "short_name": "ImageGen",
-  "description": "Generate images from text using Google Gemini AI — free up to 500/day",
+  "description": "Generate images from text using Stable Diffusion XL — free via Hugging Face",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",
