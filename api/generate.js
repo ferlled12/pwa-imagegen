@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
@@ -13,54 +13,37 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Start prediction with Flux Schnell
-    const startRes = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "Prefer": "wait"
-      },
-      body: JSON.stringify({
-        input: {
-          prompt,
-          go_fast: true,
-          num_outputs: 1,
-          aspect_ratio: "1:1",
-          output_format: "webp",
-          output_quality: 90
-        }
-      })
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
+        })
+      }
+    );
+
+    const data = await geminiRes.json();
+
+    if (!geminiRes.ok) {
+      const msg = data?.error?.message || "Gemini API error";
+      return res.status(geminiRes.status).json({ error: msg });
+    }
+
+    // Find the image part in the response
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith("image/"));
+
+    if (!imagePart) {
+      return res.status(500).json({ error: "No image returned by Gemini" });
+    }
+
+    return res.status(200).json({
+      imageBase64: imagePart.inlineData.data,
+      mimeType: imagePart.inlineData.mimeType
     });
-
-    const prediction = await startRes.json();
-
-    if (!startRes.ok) {
-      return res.status(startRes.status).json({ error: prediction.detail || "Replicate API error" });
-    }
-
-    // Poll until complete
-    let result = prediction;
-    let attempts = 0;
-
-    while (result.status !== "succeeded" && result.status !== "failed" && attempts < 30) {
-      await new Promise(r => setTimeout(r, 1000));
-      const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
-        headers: { "Authorization": `Bearer ${apiKey}` }
-      });
-      result = await pollRes.json();
-      attempts++;
-    }
-
-    if (result.status === "failed") {
-      return res.status(500).json({ error: result.error || "Generation failed" });
-    }
-
-    if (result.status !== "succeeded") {
-      return res.status(504).json({ error: "Timeout waiting for image" });
-    }
-
-    return res.status(200).json({ imageUrl: result.output[0] });
 
   } catch (err) {
     console.error(err);

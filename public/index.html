@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="ImageGen" />
-  <title>ImageGen · Flux Schnell</title>
+  <title>ImageGen · Gemini</title>
   <link rel="manifest" href="/manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -460,7 +460,7 @@
     <div class="logo">
       <div class="logo-dot"></div>
       ImageGen
-      <span class="badge">Flux Schnell</span>
+      <span class="badge">Gemini · Gratis</span>
     </div>
     <button id="btn-settings" title="Configuración" aria-label="Configuración">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -477,7 +477,7 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
       </svg>
-      Introduce tu API key de Replicate para empezar →
+      Introduce tu API key de Google AI Studio para empezar →
     </div>
 
     <!-- Canvas -->
@@ -521,7 +521,7 @@
 
   </main>
 
-  <footer>Powered by Replicate · Flux Schnell · PWA</footer>
+  <footer>Powered by Google Gemini 2.5 Flash Image · Gratis hasta 500 imágenes/día · PWA</footer>
 
   <!-- SETTINGS MODAL -->
   <div class="modal-overlay" id="modal-overlay">
@@ -530,10 +530,11 @@
         Configuración
         <button class="modal-close" id="modal-close" aria-label="Cerrar">✕</button>
       </h2>
-      <label class="field-label" for="api-key-input">API Key de Replicate</label>
-      <input type="password" id="api-key-input" class="field-input" placeholder="r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+      <label class="field-label" for="api-key-input">API Key de Google AI Studio</label>
+      <input type="password" id="api-key-input" class="field-input" placeholder="AIzaSy..." autocomplete="off" />
       <p class="key-hint">
-        Consigue tu key en <strong style="color:var(--text)">replicate.com/account/api-tokens</strong><br/>
+        Consigue tu key gratis en <strong style="color:var(--text)">aistudio.google.com</strong> → "Get API Key"<br/>
+        Gratis hasta <strong style="color:var(--accent)">500 imágenes/día</strong> sin tarjeta de crédito.<br/>
         Se guarda solo en tu dispositivo (localStorage), nunca en el servidor.
       </p>
       <button id="btn-save-key">Guardar API Key</button>
@@ -542,7 +543,7 @@
 
   <script>
     // ── State ──────────────────────────────────────────────────
-    let apiKey = localStorage.getItem("replicate_api_key") || "";
+    let apiKey = localStorage.getItem("gemini_api_key") || "";
     let history = JSON.parse(localStorage.getItem("img_history") || "[]");
     let currentImageUrl = null;
     let generating = false;
@@ -603,7 +604,7 @@
       const val = apiKeyInput.value.trim();
       if (!val) return;
       apiKey = val;
-      localStorage.setItem("replicate_api_key", val);
+      localStorage.setItem("gemini_api_key", val);
       closeModal();
       updateUI();
       showSuccess("API Key guardada ✓");
@@ -632,8 +633,9 @@
           throw new Error(data.error || "Error desconocido");
         }
 
-        showImage(data.imageUrl, prompt);
-        addToHistory(data.imageUrl, prompt);
+        const imgSrc = `data:${data.mimeType};base64,${data.imageBase64}`;
+        showImage(imgSrc, prompt);
+        addToHistory(imgSrc, prompt);
 
       } catch (err) {
         showError(err.message);
@@ -716,16 +718,12 @@
     async function downloadImage() {
       if (!currentImageUrl) return;
       try {
-        const res = await fetch(currentImageUrl);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = `imagegen-${Date.now()}.webp`;
+        a.href = currentImageUrl;
+        a.download = `imagegen-${Date.now()}.png`;
         a.click();
-        URL.revokeObjectURL(url);
       } catch {
-        window.open(currentImageUrl, "_blank");
+        console.error("Download failed");
       }
     }
 
