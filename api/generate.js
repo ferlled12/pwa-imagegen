@@ -43,11 +43,12 @@ export default async function handler(req, res) {
       return res.status(hfRes.status).json({ error: err.error || "Error en Hugging Face API" });
     }
 
-    // Response is raw image bytes
+    // Response is raw image bytes — read actual content type
+    const mimeType = hfRes.headers.get("content-type") || "image/png";
     const buffer = await hfRes.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
 
-    return res.status(200).json({ imageBase64: base64, mimeType: "image/jpeg" });
+    return res.status(200).json({ imageBase64: base64, mimeType });
 
   } catch (err) {
     console.error(err);
