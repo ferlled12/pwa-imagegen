@@ -11,19 +11,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing prompt or apiKey" });
   }
 
+  // Sanitize apiKey — strip any non-ASCII characters (copy-paste artifacts)
+  const cleanKey = apiKey.replace(/[^\x00-\x7F]/g, "").trim();
+
   const MODEL = "stabilityai/stable-diffusion-xl-base-1.0";
 
   try {
+    const safeBody = JSON.stringify({ inputs: prompt });
     const hfRes = await fetch(
       `https://router.huggingface.co/hf-inference/models/${MODEL}`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
+          "Authorization": `Bearer ${cleanKey}`,
+          "Content-Type": "application/json; charset=utf-8",
           "x-use-cache": "0"
         },
-        body: JSON.stringify({ inputs: prompt })
+        body: safeBody
       }
     );
 
