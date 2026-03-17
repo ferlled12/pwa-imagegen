@@ -7,46 +7,51 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const { prompt, apiKey } = req.body;
-
   if (!prompt || !apiKey) {
     return res.status(400).json({ error: "Missing prompt or apiKey" });
   }
 
+  const MODEL = "stabilityai/stable-diffusion-xl-base-1.0";
+
   try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
+    const hfRes = await fetch(
+      `https://api-inference.huggingface.co/models/${MODEL}`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ["TEXT", "IMAGE"] }
-        })
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "x-use-cache": "0"
+        },
+        body: JSON.stringify({ inputs: prompt })
       }
     );
 
-    const data = await geminiRes.json();
-
-    if (!geminiRes.ok) {
-      const msg = data?.error?.message || "Gemini API error";
-      return res.status(geminiRes.status).json({ error: msg });
+    // Model may still be loading — HF returns 503 with estimated_time
+    if (hfRes.status === 503) {
+      const info = await hfRes.json();
+      const wait = info.estimated_time ? Math.ceil(info.estimated_time) : 30;
+      return res.status(503).json({
+        error: `El modelo se está cargando, espera ${wait} segundos e inténtalo de nuevo.`,
+        loading: true,
+        estimated_time: wait
+      });
     }
 
-    // Find the image part in the response
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith("image/"));
-
-    if (!imagePart) {
-      return res.status(500).json({ error: "No image returned by Gemini" });
+    if (!hfRes.ok) {
+      const err = await hfRes.json().catch(() => ({}));
+      return res.status(hfRes.status).json({ error: err.error || "Error en Hugging Face API" });
     }
 
-    return res.status(200).json({
-      imageBase64: imagePart.inlineData.data,
-      mimeType: imagePart.inlineData.mimeType
-    });
+    // Response is raw image bytes
+    const buffer = await hfRes.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+
+    return res.status(200).json({ imageBase64: base64, mimeType: "image/jpeg" });
 
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
+
