@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <meta name="description" content="Genera imágenes a partir de texto con Flux Schnell AI" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ImageGen" />
+  <title>ImageGen · Flux Schnell</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --border:    #1e1e2e;
+      --accent:    #c8ff57;
+      --accent2:   #57c8ff;
+      --text:      #e8e8f0;
+      --muted:     #5a5a72;
+      --danger:    #ff5757;
+      --radius:    14px;
+      --glow:      0 0 40px rgba(200,255,87,.12);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 18px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,15,.85);
+      backdrop-filter: blur(14px);
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50%      { opacity:.4; transform:scale(.7); }
+    }
+
+    .badge {
+      font-size: .65rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid rgba(200,255,87,.3);
+      padding: 3px 8px;
+      border-radius: 20px;
+      background: rgba(200,255,87,.06);
+    }
+
+    #btn-settings {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .2s, color .2s;
+    }
+    #btn-settings:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── MAIN ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 32px 24px;
+      max-width: 720px;
+      width: 100%;
+      margin: 0 auto;
+      gap: 28px;
+    }
+
+    /* ── CANVAS AREA ── */
+    .canvas-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--surface);
+      transition: border-color .3s, box-shadow .3s;
+    }
+
+    .canvas-wrap.glowing {
+      border-color: rgba(200,255,87,.4);
+      box-shadow: var(--glow);
+    }
+
+    #output-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: none;
+      animation: fadeIn .5s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity:0; transform:scale(1.02); }
+      to   { opacity:1; transform:scale(1); }
+    }
+
+    .placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px;
+      color: var(--muted);
+    }
+
+    .placeholder svg { opacity: .25; }
+
+    .placeholder p {
+      font-size: .78rem;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      opacity: .5;
+    }
+
+    /* Loading shimmer */
+    .shimmer {
+      position: absolute; inset: 0;
+      display: none;
+      background: linear-gradient(
+        110deg,
+        var(--surface) 30%,
+        rgba(200,255,87,.05) 50%,
+        var(--surface) 70%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 1.6s infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .spinner-wrap {
+      position: absolute; inset: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px;
+    }
+
+    .spinner {
+      width: 40px; height: 40px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .9s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .spinner-label {
+      font-size: .72rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      animation: blink 1.4s ease-in-out infinite;
+    }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* Download btn */
+    #btn-download {
+      position: absolute;
+      bottom: 12px; right: 12px;
+      background: rgba(10,10,15,.8);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: .72rem;
+      cursor: pointer;
+      display: none;
+      align-items: center; gap: 6px;
+      backdrop-filter: blur(8px);
+      transition: border-color .2s, color .2s;
+    }
+    #btn-download:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── FORM ── */
+    .form-section { display: flex; flex-direction: column; gap: 12px; }
+
+    .prompt-wrap {
+      position: relative;
+    }
+
+    textarea#prompt {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: .88rem;
+      line-height: 1.6;
+      padding: 16px 18px;
+      resize: none;
+      min-height: 96px;
+      transition: border-color .2s, box-shadow .2s;
+      outline: none;
+    }
+
+    textarea#prompt::placeholder { color: var(--muted); }
+
+    textarea#prompt:focus {
+      border-color: rgba(200,255,87,.4);
+      box-shadow: 0 0 0 3px rgba(200,255,87,.06);
+    }
+
+    .char-count {
+      position: absolute;
+      bottom: 10px; right: 14px;
+      font-size: .65rem;
+      color: var(--muted);
+      pointer-events: none;
+    }
+
+    #btn-generate {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent);
+      color: #0a0a0f;
+      border: none;
+      border-radius: var(--radius);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: .02em;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s, box-shadow .2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #btn-generate:hover { opacity: .9; box-shadow: 0 0 24px rgba(200,255,87,.3); }
+    #btn-generate:active { transform: scale(.98); }
+    #btn-generate:disabled { opacity: .35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Error */
+    .error-msg {
+      display: none;
+      background: rgba(255,87,87,.08);
+      border: 1px solid rgba(255,87,87,.25);
+      border-radius: 10px;
+      color: var(--danger);
+      padding: 12px 16px;
+      font-size: .8rem;
+      line-height: 1.5;
+    }
+
+    /* ── HISTORY ── */
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-size: .72rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .history-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .history-thumb {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: border-color .2s, transform .2s;
+    }
+
+    .history-thumb:hover {
+      border-color: var(--accent2);
+      transform: scale(1.04);
+    }
+
+    .history-thumb img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+
+    /* ── SETTINGS MODAL ── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.7);
+      backdrop-filter: blur(6px);
+      z-index: 200;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px 20px 0 0;
+      padding: 32px 24px 40px;
+      width: 100%;
+      max-width: 720px;
+      animation: slideUp .3s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(40px); opacity:0; }
+      to   { transform: translateY(0);    opacity:1; }
+    }
+
+    .modal h2 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 20px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .modal-close {
+      background: none; border: none;
+      color: var(--muted); cursor: pointer;
+      font-size: 1.3rem; line-height:1;
+      padding: 2px;
+    }
+
+    label.field-label {
+      display: block;
+      font-size: .72rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    input.field-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: .85rem;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    input.field-input:focus { border-color: rgba(200,255,87,.4); }
+
+    .key-hint {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    #btn-save-key {
+      margin-top: 20px;
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      color: #0a0a0f;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    #btn-save-key:hover { opacity: .88; }
+
+    /* ── API KEY BANNER ── */
+    .api-banner {
+      background: rgba(200,255,87,.06);
+      border: 1px solid rgba(200,255,87,.2);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: .78rem;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .api-banner:hover { background: rgba(200,255,87,.1); }
+    .api-banner.hidden { display: none; }
+
+    /* ── FOOTER ── */
+    footer {
+      padding: 16px 24px;
+      text-align: center;
+      font-size: .65rem;
+      letter-spacing: .04em;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      opacity: .5;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      ImageGen
+      <span class="badge">Flux Schnell</span>
+    </div>
+    <button id="btn-settings" title="Configuración" aria-label="Configuración">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- No API key banner -->
+    <div class="api-banner" id="api-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      Introduce tu API key de Replicate para empezar →
+    </div>
+
+    <!-- Canvas -->
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="placeholder" id="placeholder">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <p>Tu imagen aparecerá aquí</p>
+      </div>
+      <div class="shimmer" id="shimmer"></div>
+      <div class="spinner-wrap" id="spinner-wrap">
+        <div class="spinner"></div>
+        <div class="spinner-label">Generando…</div>
+      </div>
+      <img id="output-img" alt="Imagen generada" />
+      <button id="btn-download">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Guardar
+      </button>
+    </div>
+
+    <!-- Form -->
+    <div class="form-section">
+      <div class="error-msg" id="error-msg"></div>
+      <div class="prompt-wrap">
+        <textarea id="prompt" placeholder="Describe la imagen que quieres generar… (en inglés para mejores resultados)" maxlength="500" rows="3"></textarea>
+        <span class="char-count" id="char-count">0 / 500</span>
+      </div>
+      <button id="btn-generate" disabled>Generar imagen</button>
+    </div>
+
+    <!-- History -->
+    <div id="history-section" style="display:none">
+      <p class="section-title">Historial reciente</p>
+      <div class="history-grid" id="history-grid"></div>
+    </div>
+
+  </main>
+
+  <footer>Powered by Replicate · Flux Schnell · PWA</footer>
+
+  <!-- SETTINGS MODAL -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <h2>
+        Configuración
+        <button class="modal-close" id="modal-close" aria-label="Cerrar">✕</button>
+      </h2>
+      <label class="field-label" for="api-key-input">API Key de Replicate</label>
+      <input type="password" id="api-key-input" class="field-input" placeholder="r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+      <p class="key-hint">
+        Consigue tu key en <strong style="color:var(--text)">replicate.com/account/api-tokens</strong><br/>
+        Se guarda solo en tu dispositivo (localStorage), nunca en el servidor.
+      </p>
+      <button id="btn-save-key">Guardar API Key</button>
+    </div>
+  </div>
+
+  <script>
+    // ── State ──────────────────────────────────────────────────
+    let apiKey = localStorage.getItem("replicate_api_key") || "";
+    let history = JSON.parse(localStorage.getItem("img_history") || "[]");
+    let currentImageUrl = null;
+    let generating = false;
+
+    // ── Elements ───────────────────────────────────────────────
+    const promptEl      = document.getElementById("prompt");
+    const btnGenerate   = document.getElementById("btn-generate");
+    const btnDownload   = document.getElementById("btn-download");
+    const btnSettings   = document.getElementById("btn-settings");
+    const btnSaveKey    = document.getElementById("btn-save-key");
+    const btnModalClose = document.getElementById("modal-close");
+    const modalOverlay  = document.getElementById("modal-overlay");
+    const apiKeyInput   = document.getElementById("api-key-input");
+    const apiBanner     = document.getElementById("api-banner");
+    const outputImg     = document.getElementById("output-img");
+    const placeholder   = document.getElementById("placeholder");
+    const shimmer       = document.getElementById("shimmer");
+    const spinnerWrap   = document.getElementById("spinner-wrap");
+    const errorMsg      = document.getElementById("error-msg");
+    const charCount     = document.getElementById("char-count");
+    const canvasWrap    = document.getElementById("canvas-wrap");
+    const historySection= document.getElementById("history-section");
+    const historyGrid   = document.getElementById("history-grid");
+
+    // ── Init ───────────────────────────────────────────────────
+    function init() {
+      updateUI();
+      renderHistory();
+      promptEl.addEventListener("input", onPromptInput);
+      btnGenerate.addEventListener("click", generate);
+      btnSettings.addEventListener("click", openModal);
+      btnModalClose.addEventListener("click", closeModal);
+      apiBanner.addEventListener("click", openModal);
+      modalOverlay.addEventListener("click", e => { if(e.target === modalOverlay) closeModal(); });
+      btnSaveKey.addEventListener("click", saveKey);
+      btnDownload.addEventListener("click", downloadImage);
+    }
+
+    function updateUI() {
+      const hasKey = !!apiKey;
+      apiBanner.classList.toggle("hidden", hasKey);
+      btnGenerate.disabled = !hasKey || !promptEl.value.trim() || generating;
+      if (apiKey) apiKeyInput.value = apiKey;
+    }
+
+    // ── Prompt ────────────────────────────────────────────────
+    function onPromptInput() {
+      const len = promptEl.value.length;
+      charCount.textContent = `${len} / 500`;
+      updateUI();
+    }
+
+    // ── Settings ──────────────────────────────────────────────
+    function openModal() { modalOverlay.classList.add("open"); apiKeyInput.focus(); }
+    function closeModal() { modalOverlay.classList.remove("open"); }
+
+    function saveKey() {
+      const val = apiKeyInput.value.trim();
+      if (!val) return;
+      apiKey = val;
+      localStorage.setItem("replicate_api_key", val);
+      closeModal();
+      updateUI();
+      showSuccess("API Key guardada ✓");
+    }
+
+    // ── Generate ──────────────────────────────────────────────
+    async function generate() {
+      const prompt = promptEl.value.trim();
+      if (!prompt || !apiKey || generating) return;
+
+      generating = true;
+      setLoading(true);
+      hideError();
+      updateUI();
+
+      try {
+        const res = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, apiKey })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "Error desconocido");
+        }
+
+        showImage(data.imageUrl, prompt);
+        addToHistory(data.imageUrl, prompt);
+
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        generating = false;
+        setLoading(false);
+        updateUI();
+      }
+    }
+
+    // ── UI helpers ────────────────────────────────────────────
+    function setLoading(on) {
+      shimmer.style.display   = on ? "block" : "none";
+      spinnerWrap.style.display = on ? "flex" : "none";
+      if (on) {
+        outputImg.style.display = "none";
+        placeholder.style.display = "none";
+        btnDownload.style.display = "none";
+        canvasWrap.classList.remove("glowing");
+      }
+    }
+
+    function showImage(url, prompt) {
+      currentImageUrl = url;
+      outputImg.src = url;
+      outputImg.alt = prompt;
+      outputImg.style.display = "block";
+      placeholder.style.display = "none";
+      btnDownload.style.display = "flex";
+      canvasWrap.classList.add("glowing");
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = "⚠ " + msg;
+      errorMsg.style.display = "block";
+    }
+
+    function hideError() {
+      errorMsg.style.display = "none";
+    }
+
+    function showSuccess(msg) {
+      hideError();
+      errorMsg.textContent = "✓ " + msg;
+      errorMsg.style.color = "var(--accent)";
+      errorMsg.style.background = "rgba(200,255,87,.06)";
+      errorMsg.style.borderColor = "rgba(200,255,87,.25)";
+      errorMsg.style.display = "block";
+      setTimeout(() => {
+        hideError();
+        errorMsg.style.color = "";
+        errorMsg.style.background = "";
+        errorMsg.style.borderColor = "";
+      }, 2500);
+    }
+
+    // ── History ───────────────────────────────────────────────
+    function addToHistory(url, prompt) {
+      history.unshift({ url, prompt, ts: Date.now() });
+      if (history.length > 8) history = history.slice(0, 8);
+      localStorage.setItem("img_history", JSON.stringify(history));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      if (history.length === 0) { historySection.style.display = "none"; return; }
+      historySection.style.display = "block";
+      historyGrid.innerHTML = "";
+      history.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "history-thumb";
+        div.title = item.prompt;
+        div.innerHTML = `<img src="${item.url}" alt="${item.prompt}" loading="lazy" />`;
+        div.addEventListener("click", () => showImage(item.url, item.prompt));
+        historyGrid.appendChild(div);
+      });
+    }
+
+    // ── Download ──────────────────────────────────────────────
+    async function downloadImage() {
+      if (!currentImageUrl) return;
+      try {
+        const res = await fetch(currentImageUrl);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `imagegen-${Date.now()}.webp`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        window.open(currentImageUrl, "_blank");
+      }
+    }
+
+    // ── Enter to submit ───────────────────────────────────────
+    promptEl.addEventListener("keydown", e => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) generate();
+    });
+
+    // ── Service Worker ────────────────────────────────────────
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+
+    init();
+  </script>
+</body>
+</html>

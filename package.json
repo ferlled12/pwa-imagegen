@@ -1,0 +1,16 @@
+{
+  "name": "pwa-imagegen",
+  "version": "1.0.0",
+  "description": "PWA para generar imágenes con Flux Schnell via Replicate",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "devDependencies": {
+    "vercel": "^34.0.0"
+  }
+}
