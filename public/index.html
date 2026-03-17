@@ -627,17 +627,19 @@
           body: JSON.stringify({ prompt, apiKey })
         });
 
-        // Response is the image directly as binary
-        if (!res.ok) {
+        // Check if response is an image (binary) or JSON (error)
+        const contentType = res.headers.get("content-type") || "";
+
+        if (contentType.startsWith("image/")) {
+          const blob = await res.blob();
+          const imgSrc = URL.createObjectURL(blob);
+          showImage(imgSrc, prompt);
+          addToHistory(imgSrc, prompt);
+        } else {
           const data = await res.json().catch(() => ({}));
           if (res.status === 503 && data.loading) throw new Error(`⏳ ${data.error}`);
           throw new Error(data.error || "Error desconocido");
         }
-
-        const blob = await res.blob();
-        const imgSrc = URL.createObjectURL(blob);
-        showImage(imgSrc, prompt);
-        addToHistory(imgSrc, prompt);
 
       } catch (err) {
         showError(err.message);
